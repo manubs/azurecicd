@@ -62,7 +62,7 @@ steps:
   displayName: 'Trigger Jenkins Job'
   inputs:
     serverEndpoint: 'JenkinsServer'
-    jobName: '<jenkins-job-name>'
+    jobName: 'manoj'
     captureConsole: true
 
 # Step 7: Deploy to Kubernetes with ArgoCD
