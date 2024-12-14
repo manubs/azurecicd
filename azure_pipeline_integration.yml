@@ -1,0 +1,79 @@
+# Azure DevOps Pipeline for Integrating Jenkins, SonarQube, Nexus, and ArgoCD
+
+trigger:
+- main
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  SONARQUBE_HOST: "http://192.168.1.100:9000"
+  SONARQUBE_TOKEN: "my-sonarqube-token"
+  NEXUS_HOST: "http://192.168.1.101:8081"
+  JENKINS_HOST: "http://192.168.1.102:8080"
+  JENKINS_CREDENTIALS_ID: "jenkins-cred-id"
+  DOCKER_REGISTRY: "devopsacr.azurecr.io"
+
+steps:
+
+# Step 1: Checkout Code
+- task: Checkout@1
+  displayName: 'Checkout Code'
+
+# Step 2: Build the Application
+- task: Maven@3
+  displayName: 'Build with Maven'
+  inputs:
+    goals: 'clean install'
+
+# Step 3: Analyze Code with SonarQube
+- task: SonarQubePrepare@5
+  displayName: 'Prepare Analysis Configuration'
+  inputs:
+    SonarQube: 'SonarQubeServer'
+    scannerMode: 'CLI'
+    configMode: 'manual'
+    cliProjectKey: 'my-project-key'
+    cliSources: '.'
+
+- task: SonarQubeAnalyze@5
+  displayName: 'Run SonarQube Analysis'
+
+- task: SonarQubePublish@5
+  displayName: 'Publish SonarQube Results'
+
+# Step 4: Publish Build Artifacts to Nexus
+- script: |
+    mvn deploy -DaltDeploymentRepository="nexus::default::$(NEXUS_HOST)/repository/maven-releases"
+  displayName: 'Deploy Artifacts to Nexus'
+
+# Step 5: Build and Push Docker Image to ACR
+- task: Docker@2
+  displayName: 'Build and Push Docker Image'
+  inputs:
+    containerRegistry: '$(DOCKER_REGISTRY)'
+    repository: 'my-app-repo'
+    command: 'buildAndPush'
+    Dockerfile: '**/Dockerfile'
+    tags: '$(Build.BuildId)'
+
+# Step 6: Trigger Jenkins Job (Optional)
+- task: JenkinsQueueJob@1
+  displayName: 'Trigger Jenkins Job'
+  inputs:
+    serverEndpoint: 'JenkinsServer'
+    jobName: '<jenkins-job-name>'
+    captureConsole: true
+
+# Step 7: Deploy to Kubernetes with ArgoCD
+- script: |
+    kubectl apply -f deployment.yaml
+    kubectl apply -f service.yaml
+  displayName: 'Deploy Application to Kubernetes via ArgoCD'
+
+# Step 8: Post-Deployment Validation
+- script: |
+    kubectl get pods -n default
+    kubectl get svc -n default
+  displayName: 'Validate Deployment in Kubernetes'
+
